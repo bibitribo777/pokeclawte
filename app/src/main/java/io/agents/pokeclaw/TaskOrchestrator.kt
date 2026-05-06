@@ -8,6 +8,9 @@ import io.agents.pokeclaw.agent.AgentConfig
 import io.agents.pokeclaw.agent.AgentService
 import io.agents.pokeclaw.agent.AgentServiceFactory
 import io.agents.pokeclaw.agent.PipelineRouter
+import io.agents.pokeclaw.agent.experience.CachedReplayExecutor
+import io.agents.pokeclaw.agent.experience.CachedToolCall
+import io.agents.pokeclaw.agent.experience.ExperienceCache
 import io.agents.pokeclaw.agent.skill.SkillExecutor
 import io.agents.pokeclaw.agent.skill.SkillRegistry
 import io.agents.pokeclaw.channel.Channel
@@ -136,8 +139,8 @@ class TaskOrchestrator(
 
         ForegroundService.updateTaskStatus(ClawApplication.instance, "Preparing task...")
 
-        // Tier 1: Deterministic routing
-        val route = pipelineRouter.route(task)
+        // Tier 1: Deterministic routing (skip cache on fallback to avoid loops)
+        val route = pipelineRouter.route(task, skipCache = isFallback)
         when (route) {
             is PipelineRouter.Route.DirectIntent -> {
                 XLog.i(TAG, "Pipeline Tier 1: DirectIntent — ${route.description}")
@@ -223,6 +226,32 @@ class TaskOrchestrator(
                     XLog.w(TAG, "Skill ${route.skillId} not found, falling through to agent loop")
                 }
             }
+            is PipelineRouter.Route.CachedReplay -> {
+                XLog.i(TAG, "Pipeline Tier 1.8: CachedReplay — ${route.toolCalls.size} tool calls")
+                FloatingCircleManager.ensureShowing()
+                FloatingCircleManager.showTaskNotify(task, channel)
+                Thread({
+                    val executor = CachedReplayExecutor()
+                    val result = executor.execute(route.toolCalls) { step, total, desc ->
+                        taskEventCallback?.invoke(TaskEvent.Progress(step, "Step $step/$total: $desc"))
+                        ForegroundService.updateTaskStatus(ClawApplication.instance, desc)
+                    }
+                    if (result.success) {
+                        ChannelManager.sendMessage(channel, "✓ ${result.message}", messageID)
+                        taskEventCallback?.invoke(TaskEvent.Completed(result.message))
+                        releaseTask()
+                        FloatingCircleManager.setSuccessState()
+                        ForegroundService.resetToIdle(ClawApplication.instance)
+                        onTaskFinished()
+                    } else {
+                        XLog.w(TAG, "Cached replay failed: ${result.message}, falling back to agent loop")
+                        ExperienceCache.remove(route.task)
+                        taskEventCallback?.invoke(TaskEvent.ToolAction("Retrying with AI agent"))
+                        startNewTask(channel, route.task, messageID, isFallback = true)
+                    }
+                }, "cached-replay").start()
+                return
+            }
             is PipelineRouter.Route.Chat, is PipelineRouter.Route.AgentLoop -> {
                 // Fall through to agent loop
             }
@@ -253,6 +282,7 @@ class TaskOrchestrator(
         }
 
         var floatingShown = false
+        val toolCallHistory = mutableListOf<CachedToolCall>()
 
         val agentPrompt = agentPromptOverride?.takeIf { it.isNotBlank() } ?: task
         agentService.executeTask(agentPrompt, object : AgentCallback {
@@ -293,6 +323,7 @@ class TaskOrchestrator(
 
             override fun onToolCall(round: Int, toolId: String, toolName: String, parameters: String) {
                 XLog.d(TAG, "onToolCall: $toolId($toolName), $parameters")
+                toolCallHistory.add(CachedToolCall(toolName, parameters))
                 // Don't show floating circle for finish tool (it's just completion, not a real action)
                 val isFinish = toolName == "finish" || toolId == "finish"
                 if (!floatingShown && !isFinish) {
@@ -358,6 +389,10 @@ class TaskOrchestrator(
                 answer = answer.removePrefix("Task completed:").removePrefix("Task completed").trim()
                 if (answer.isEmpty()) answer = "Done."
                 taskEventCallback?.invoke(TaskEvent.Completed(answer, modelName))
+                // Cache successful trajectory for future replay
+                if (!isFallback && toolCallHistory.isNotEmpty()) {
+                    ExperienceCache.put(task, toolCallHistory.toList())
+                }
                 ForegroundService.resetToIdle(ClawApplication.instance)
                 flushRoundBuffer()
                 val completedSession = releaseTask()
