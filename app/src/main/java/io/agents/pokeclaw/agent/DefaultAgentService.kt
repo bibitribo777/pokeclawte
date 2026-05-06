@@ -465,8 +465,18 @@ class DefaultAgentService : AgentService {
             } else ""
         } else ""
 
+        val globalPromptSection = buildString {
+            val prompt = io.agents.pokeclaw.utils.KVUtils.getGlobalUserPrompt().trim()
+            if (prompt.isNotEmpty()) {
+                append("\n\n## Your Persistent Instructions\n")
+                append("The user has provided these standing instructions that apply to all tasks:\n\n")
+                append(prompt)
+            }
+        }
+
         val fullSystemPrompt = buildString {
             append(basePrompt)
+            append(globalPromptSection)
             append(playbookSection)
             append(inAppSearchGuard.buildPromptSection())
             append(emailComposeGuard.buildPromptSection())

@@ -5,6 +5,8 @@ package io.agents.pokeclaw.agent
 
 import android.content.Context
 import android.content.Intent
+import io.agents.pokeclaw.agent.experience.CachedToolCall
+import io.agents.pokeclaw.agent.experience.ExperienceCache
 import io.agents.pokeclaw.agent.skill.SkillRegistry
 import io.agents.pokeclaw.tool.ToolResult
 import io.agents.pokeclaw.tool.ToolRegistry
@@ -31,6 +33,9 @@ class PipelineRouter(private val context: Context) {
         /** Tier 2: Execute a registered skill */
         data class Skill(val skillId: String, val params: Map<String, String>, val description: String) : Route()
 
+        /** Tier 1.8: Replay a previously cached trajectory */
+        data class CachedReplay(val task: String, val toolCalls: List<CachedToolCall>) : Route()
+
         /** Tier 2/3: Run the full agent loop */
         data class AgentLoop(val task: String, val app: String? = null) : Route()
 
@@ -44,7 +49,7 @@ class PipelineRouter(private val context: Context) {
      * @param task user's task text
      * @return the routing decision
      */
-    fun route(task: String): Route {
+    fun route(task: String, skipCache: Boolean = false): Route {
         // Compound tasks (containing "and", "then", "after") should go to agent loop,
         // not be partially handled by Tier 1 deterministic matching.
         val lower = task.lowercase()
@@ -79,6 +84,20 @@ class PipelineRouter(private val context: Context) {
             val params = extractSkillParams(task, matchedSkill.triggerPatterns)
             XLog.i(TAG, "Tier 1.5 skill match: ${matchedSkill.id} params=$params")
             return Route.Skill(matchedSkill.id, params, matchedSkill.description)
+        }
+
+        // Tier 1.8: Experience cache replay (skip on fallback to avoid loops)
+        if (!skipCache) {
+            val cached = ExperienceCache.get(task)
+            if (cached != null) {
+                XLog.i(TAG, "Tier 1.8 exact cache hit: \"${cached.task}\" → ${cached.toolCalls.size} calls")
+                return Route.CachedReplay(task, cached.toolCalls)
+            }
+            val fuzzyMatch = ExperienceCache.findSimilar(task)
+            if (fuzzyMatch != null) {
+                XLog.i(TAG, "Tier 1.8 fuzzy cache hit: \"${fuzzyMatch.task}\" → ${fuzzyMatch.toolCalls.size} calls")
+                return Route.CachedReplay(task, fuzzyMatch.toolCalls)
+            }
         }
 
         // No deterministic match → Tier 3 agent loop
