@@ -320,9 +320,20 @@ class SettingsActivity : BaseActivity() {
             leadingIcon = android.R.drawable.ic_menu_recent_history,
             title = "Task Budget",
             onClick = { showBudgetDialog() },
-            showDivider = false
+            showDivider = true
         ).apply {
             setTrailingText(io.agents.pokeclaw.agent.TaskBudget.describeCurrentBudget())
+        }
+
+        // Global Instructions
+        modelGroup.addMenuItem(
+            leadingIcon = android.R.drawable.ic_menu_edit,
+            title = "Global Instructions",
+            onClick = { showGlobalInstructionsDialog() },
+            showDivider = false
+        ).apply {
+            val hasInstructions = KVUtils.getGlobalUserPrompt().isNotBlank()
+            setTrailingText(if (hasInstructions) "Set" else "Not set")
         }
 
         // Appearance
@@ -681,6 +692,58 @@ class SettingsActivity : BaseActivity() {
             actionTitle = getString(R.string.unbind_action),
             onAction = onUnbind
         )
+    }
+
+    private fun showGlobalInstructionsDialog() {
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 32, 48, 16)
+        }
+
+        val hint = android.widget.TextView(this).apply {
+            text = "These instructions are injected into every conversation's system prompt. " +
+                   "Use them to set preferences, constraints, or defaults — e.g. " +
+                   "\"Always reply in Chinese\" or \"Prefer Google Maps over Baidu Maps\"."
+            setTextColor(getColor(R.color.colorTextSecondary))
+            textSize = 14f
+        }
+        layout.addView(hint)
+
+        val input = android.widget.EditText(this).apply {
+            val existing = KVUtils.getGlobalUserPrompt()
+            setText(existing)
+            hint = "e.g. Always reply in Chinese. Never use WeChat Pay."
+            minLines = 5
+            maxLines = 8
+            gravity = android.view.Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                        android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                        android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setTextColor(getColor(R.color.colorTextPrimary))
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 24 }
+        }
+        layout.addView(input)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Global Instructions")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                val text = input.text.toString().trim()
+                KVUtils.setGlobalUserPrompt(text)
+                val status = if (text.isNotEmpty()) "Set (${text.length} chars)" else "Not set"
+                Toast.makeText(this, "Global instructions: $status", Toast.LENGTH_SHORT).show()
+                recreate()
+            }
+            .setNeutralButton("Clear") { _, _ ->
+                KVUtils.setGlobalUserPrompt("")
+                Toast.makeText(this, "Global instructions cleared", Toast.LENGTH_SHORT).show()
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showBudgetDialog() {

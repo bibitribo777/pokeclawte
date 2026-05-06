@@ -285,6 +285,13 @@ object KVUtils {
     private const val KEY_PENDING_LOCAL_GPU_INIT_AT = "KEY_PENDING_LOCAL_GPU_INIT_AT"
     private const val KEY_PENDING_LOCAL_GPU_INIT_PID = "KEY_PENDING_LOCAL_GPU_INIT_PID"
 
+    // ==================== Global User Prompt ====================
+
+    private const val KEY_GLOBAL_USER_PROMPT = "KEY_GLOBAL_USER_PROMPT"
+
+    fun getGlobalUserPrompt(): String = getString(KEY_GLOBAL_USER_PROMPT, "")
+    fun setGlobalUserPrompt(value: String) = putString(KEY_GLOBAL_USER_PROMPT, value)
+
     fun getLlmApiKey(): String = getString(KEY_LLM_API_KEY, "")
     fun setLlmApiKey(value: String) = putString(KEY_LLM_API_KEY, value)
 
