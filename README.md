@@ -301,6 +301,13 @@ Every star helps more people find the project. Every issue helps shape the next 
 
 ## Changelog
 
+### v0.7.0 (2026-05-26) — feature batch
+
+- **Voice input in chat (#44).** New mic button between the text field and the send button launches Android's built-in speech recognition; the transcript appends to whatever you already typed, so you can dictate the second half of a prompt. Works on any device with Google Speech Services; falls back gracefully with a toast on devices without it. No RECORD_AUDIO permission is requested by PokeClaw — the system dialog handles its own permission.
+- **Persistent global instructions (#45).** New Settings entry under "Models" → "Global instructions". Anything you put here is prepended to every conversation's system prompt — useful for "always reply in Cantonese" or "I'm in Vancouver, default to PST" style rules. Up to 2000 characters; clear the field to disable. Applies to both chat mode and task/agent mode.
+- **Custom local model download URL (#36).** Advanced Settings entry: point PokeClaw at a self-supplied `.litertlm` URL (HuggingFace mirror, your own server, etc.) and it appears as a new row in the Available Models list alongside the built-in Gemma options. File-size validation is relaxed for custom models because we can't know the expected size up front.
+- **i18n for new features.** Voice input, global prompt, and custom model URL strings shipped in English, Simplified Chinese, and Japanese.
+
 ### v0.6.4 (2026-04-13)
 - **GPU/backend truth is stricter.** PokeClaw no longer treats "engine initialized" as proof that GPU inference actually works. A device is only treated as GPU-verified after a real inference succeeds.
 - **Tensor/Pixel local startup is more honest.** Pixel/Tensor devices now take a safer CPU-first path on the current LiteRT-LM stack instead of pretending the GPU path is healthy and failing later during inference.
