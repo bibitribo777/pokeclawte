@@ -71,3 +71,4 @@ _Move completed items here with date._
 - [x] ~~2026-04-08: NLP Playbooks Layer 2: 5 playbooks (Search, Settings, Email, Screen, Notifications)~~
 - [x] ~~2026-04-08: Tinder research: UI structure documented, workflow designed, needs login~~
 - [x] ~~2026-04-10: Chat bubble timestamps~~ — IG-style per-message footer landed for user + assistant bubbles, with hidden timestamp metadata persisted in markdown history so relaunch/reload keeps stable times
+- [x] ~~2026-05-26: Voice Input (#44)~~ — system RecognizerIntent wired into chat composer between TextField and Send FAB. V1/V2/V5/V10 ADB-verified PASS on Pixel 8 Pro v0.7.0; V3/V4/V7/V8/V9 need human voice verify, code path structurally verified
