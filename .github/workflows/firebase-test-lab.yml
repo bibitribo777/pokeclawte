@@ -118,6 +118,11 @@ jobs:
           set -e
           APK="${{ steps.apk.outputs.path }}"
           echo "::group::FTL smoke matrix"
+          # NOTE: --results-bucket intentionally omitted. On the Spark (free) plan
+          # the project cannot create its own Cloud Storage buckets, but Firebase
+          # Test Lab will auto-create and use a default scratch bucket
+          # (test-lab-<random>) under the project. That's exactly what we want for
+          # a free-tier smoke harness.
           gcloud firebase test android run \
             --type robo \
             --app "$APK" \
@@ -127,7 +132,6 @@ jobs:
             --num-flaky-test-attempts=0 \
             --no-record-video \
             --no-performance-metrics \
-            --results-bucket "${{ secrets.GCP_PROJECT_ID }}-ftl-results" \
             --results-history-name "pokeclaw-smoke-${{ github.ref_name }}" \
             || (echo "::error::FTL smoke FAILED"; exit 1)
           echo "::endgroup::"
@@ -139,7 +143,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Tested APK: ${{ steps.apk.outputs.path }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Results bucket: gs://${{ secrets.GCP_PROJECT_ID }}-ftl-results/" >> $GITHUB_STEP_SUMMARY
+          echo "Results: see FTL console for auto-created scratch bucket (Spark plan)." >> $GITHUB_STEP_SUMMARY
           echo "Console: https://console.firebase.google.com/project/${{ secrets.GCP_PROJECT_ID }}/testlab/histories" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**This covers what the emulator matrix CANNOT** — Pixel Tensor GPU, real Samsung One UI, real OpenCL driver presence." >> $GITHUB_STEP_SUMMARY
