@@ -324,6 +324,13 @@ class SettingsActivity : BaseActivity() {
         )
 
         group.addMenuItem(
+            leadingIcon = android.R.drawable.ic_menu_compass,
+            title = "Kali Lab",
+            onClick = { startActivity(android.content.Intent(this, io.agents.pokeclaw.ui.kali.KaliLabActivity::class.java)) },
+            showDivider = true
+        )
+
+        group.addMenuItem(
             leadingIcon = android.R.drawable.ic_menu_call,
             title = "WhatsApp",
             onClick = { Toast.makeText(this, "WhatsApp remote setup coming later", Toast.LENGTH_SHORT).show() },
