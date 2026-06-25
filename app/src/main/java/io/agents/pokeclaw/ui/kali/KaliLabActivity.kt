@@ -27,8 +27,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -99,6 +99,8 @@ private fun KaliLabScreen(
         }
     }
 
+    val tabs = listOf("Run", "Workflows", "Targets", "Findings", "Reports", "Settings")
+
     MaterialTheme {
         Scaffold(
             topBar = {
@@ -116,8 +118,8 @@ private fun KaliLabScreen(
                     .padding(padding)
                     .padding(12.dp)
             ) {
-                TabRow(selectedTabIndex = selectedTab) {
-                    listOf("Run", "Workflows", "Reports", "Settings").forEachIndexed { index, label ->
+                ScrollableTabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, label ->
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
@@ -129,8 +131,10 @@ private fun KaliLabScreen(
                 when (selectedTab) {
                     0 -> RunTab(running = running, onRun = ::submit)
                     1 -> WorkflowTab(running = running, onRun = ::submit)
-                    2 -> ReportsTab(running = running, output = output, onRun = ::submit)
-                    3 -> SettingsTab(running = running, onRun = ::submit)
+                    2 -> TargetsTab(running = running, onRun = ::submit)
+                    3 -> FindingsTab(running = running, onRun = ::submit)
+                    4 -> ReportsTab(running = running, output = output, onRun = ::submit)
+                    5 -> SettingsTab(running = running, onRun = ::submit)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 ResultBox(output = output)
@@ -222,6 +226,42 @@ private fun WorkflowTab(running: Boolean, onRun: (String) -> Unit) {
         Text("quick_host: dns_check → ping → web_check → tls_check → scan_host")
         Spacer(modifier = Modifier.height(6.dp))
         Text("web_audit: web_check → tls_check → scan_host")
+    }
+}
+
+@Composable
+private fun TargetsTab(running: Boolean, onRun: (String) -> Unit) {
+    var name by remember { mutableStateOf("home-camera") }
+    var value by remember { mutableStateOf("192.168.1.20") }
+    var type by remember { mutableStateOf("host") }
+
+    SectionCard(title = "Targets / Scope") {
+        Text("Save targets for faster repeated checks. The Orchestrator still validates allowed_targets from config.json.")
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = name, onValueChange = { name = it.replace(" ", "-") }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("IP / Domain / URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = type, onValueChange = { type = it.replace(" ", "-") }, label = { Text("Type") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(enabled = !running, onClick = { onRun("/kali target add $name $value $type") }, modifier = Modifier.fillMaxWidth()) { Text("Add / Update Target") }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(enabled = !running, onClick = { onRun("/kali targets") }, modifier = Modifier.fillMaxWidth()) { Text("Load Targets") }
+    }
+}
+
+@Composable
+private fun FindingsTab(running: Boolean, onRun: (String) -> Unit) {
+    SectionCard(title = "Findings") {
+        Text("Findings are generated from finished reports and show low/info issues and observed services.")
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(enabled = !running, onClick = { onRun("/kali findings") }, modifier = Modifier.fillMaxWidth()) { Text("Load Findings") }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    SectionCard(title = "Evidence / History") {
+        Button(enabled = !running, onClick = { onRun("/kali evidence") }, modifier = Modifier.fillMaxWidth()) { Text("Load Evidence") }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(enabled = !running, onClick = { onRun("/kali jobs") }, modifier = Modifier.fillMaxWidth()) { Text("Load Job History") }
     }
 }
 
