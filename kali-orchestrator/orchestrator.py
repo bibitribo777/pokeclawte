@@ -454,6 +454,33 @@ def summarize_result(result: Dict[str, Any]) -> str:
     return json.dumps(result, ensure_ascii=False)[:1500]
 
 
+def report_summary(path: Path) -> Dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        result = doc.get("result") or {}
+        stat = path.stat()
+        return {
+            "id": doc.get("id", path.stem),
+            "created_at": doc.get("created_at", ""),
+            "action": doc.get("action", ""),
+            "target": doc.get("target", ""),
+            "returncode": result.get("returncode", "n/a"),
+            "summary": summarize_result(result),
+            "json_path": str(path),
+            "markdown_path": str(REPORT_DIR / f"{path.stem}.md"),
+            "size_bytes": stat.st_size,
+            "mtime": int(stat.st_mtime),
+        }
+    except Exception as exc:
+        return {"id": path.stem, "error": str(exc), "json_path": str(path)}
+
+
+def list_reports(limit: int = 25) -> List[Dict[str, Any]]:
+    limit = max(1, min(int(limit), 100))
+    paths = sorted(REPORT_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [report_summary(path) for path in paths[:limit]]
+
+
 @APP.get("/health")
 def health():
     return jsonify({"ok": True, "service": "kali-security-orchestrator", "actions": sorted(ACTIONS.keys()), "workflows": sorted(list_workflows().keys()), "time": now_iso()})
@@ -473,6 +500,19 @@ def workflows():
     if deny:
         return deny
     return jsonify({"ok": True, "workflows": list_workflows()})
+
+
+@APP.get("/reports")
+def reports_index():
+    deny = require_auth()
+    if deny:
+        return deny
+    limit = request.args.get("limit", "25")
+    try:
+        limit_int = int(limit)
+    except ValueError:
+        limit_int = 25
+    return jsonify({"ok": True, "reports": list_reports(limit_int)})
 
 
 @APP.post("/run")
@@ -536,7 +576,8 @@ def report_json(report_id: str):
     deny = require_auth()
     if deny:
         return deny
-    path = REPORT_DIR / f"{report_id}.json"
+    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", report_id or "")
+    path = REPORT_DIR / f"{safe_id}.json"
     if not path.exists():
         return jsonify({"ok": False, "error": "not found"}), 404
     return send_file(path)
@@ -547,7 +588,8 @@ def report_md(report_id: str):
     deny = require_auth()
     if deny:
         return deny
-    path = REPORT_DIR / f"{report_id}.md"
+    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", report_id or "")
+    path = REPORT_DIR / f"{safe_id}.md"
     if not path.exists():
         return jsonify({"ok": False, "error": "not found"}), 404
     return send_file(path, mimetype="text/markdown")
