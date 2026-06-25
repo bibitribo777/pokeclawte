@@ -10,10 +10,13 @@ from typing import Any, Dict
 import requests
 
 
+ACTIONS = "ping, dns_check/dns, web_check/web/web_headers, tls_check/tls, scan_host, service_inventory/inventory"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Send approved security inventory actions to Kali Orchestrator")
-    parser.add_argument("action", help="ping, dns, web_headers, scan_host, inventory")
-    parser.add_argument("target", help="target from allowlist")
+    parser.add_argument("action", help=ACTIONS)
+    parser.add_argument("target", help="target from orchestrator allowlist")
     parser.add_argument("--top-ports", type=int, default=50)
     parser.add_argument("--url", default=os.getenv("KALI_ORCH_URL", "http://127.0.0.1:8899"))
     parser.add_argument("--token", default=os.getenv("KALI_ORCH_TOKEN", ""))
@@ -32,7 +35,7 @@ def main() -> int:
         args.url.rstrip("/") + "/run",
         json=payload,
         headers={"X-Orchestrator-Token": args.token},
-        timeout=120,
+        timeout=140,
     )
     try:
         data = response.json()
