@@ -24,6 +24,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -529,15 +530,20 @@ private fun ChatTopBar(
                         modelsToShow.forEach { model ->
                             DropdownMenuItem(
                                 text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            model.displayName,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (model.id == currentModel && !isLocalModel) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                        if (model.id == currentModel && !isLocalModel) {
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("✓", fontSize = 12.sp, color = colors.accent)
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                model.displayName,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (model.id == currentModel && !isLocalModel) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                            if (model.id == currentModel && !isLocalModel) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("✓", fontSize = 12.sp, color = colors.accent)
+                                            }
+                                        }
+                                        if (model.description.isNotEmpty()) {
+                                            Text(model.description, fontSize = 10.sp, color = colors.textTertiary)
                                         }
                                     }
                                 },

@@ -15,7 +15,8 @@ data class CloudModel(
     val outputPricePerM: Double,
     val tier: ModelTier,
     val contextSize: Int,
-    val recommended: Boolean = false
+    val recommended: Boolean = false,
+    val description: String = ""
 )
 
 enum class ModelTier(val stars: String, val label: String) {
@@ -59,14 +60,16 @@ enum class CloudProvider(
         )
     ),
     NVIDIA(
-        displayName = "NVIDIA",
-        // NVIDIA API Catalog / NIM endpoint is OpenAI-compatible, so it uses the OpenAI client path.
+        displayName = "NVIDIA NIM",
         defaultBaseUrl = "https://integrate.api.nvidia.com/v1",
         models = listOf(
-            CloudModel("meta/llama-3.1-70b-instruct", "Llama 3.1 70B", 0.00, 0.00, ModelTier.SMART, 128_000, recommended = true),
-            CloudModel("meta/llama-3.1-405b-instruct", "Llama 3.1 405B", 0.00, 0.00, ModelTier.PRO, 128_000),
-            CloudModel("nvidia/llama-3.1-nemotron-70b-instruct", "Nemotron 70B", 0.00, 0.00, ModelTier.PRO, 128_000),
-            CloudModel("mistralai/mixtral-8x22b-instruct-v0.1", "Mixtral 8x22B", 0.00, 0.00, ModelTier.SMART, 64_000),
+            CloudModel("meta/llama-3.3-70b-instruct", "Llama 3.3 70B", 0.0, 0.0, ModelTier.SMART, 128_000, recommended = true, description = "Allrounder: Review, Doku, Zusammenfassen"),
+            CloudModel("meta/llama-3.1-8b-instruct", "Llama 3.1 8B", 0.0, 0.0, ModelTier.LITE, 128_000, description = "Schnell: Klassifikation, Extraktion"),
+            CloudModel("meta/llama-4-maverick-17b-128e-instruct", "Llama 4 Maverick", 0.0, 0.0, ModelTier.FAST, 128_000, description = "Coding & anspruchsvolle Tasks"),
+            CloudModel("nvidia/llama-3.3-nemotron-super-49b-v1.5", "Nemotron Super 49B", 0.0, 0.0, ModelTier.SMART, 128_000, description = "Reasoning wenn 70B nicht reicht"),
+            CloudModel("nvidia/nvidia-nemotron-nano-9b-v2", "Nemotron Nano 9B", 0.0, 0.0, ModelTier.LITE, 128_000, description = "Schnelles Reasoning, einfache Logik"),
+            CloudModel("qwen/qwen3-next-80b-a3b-instruct", "Qwen3 Next 80B", 0.0, 0.0, ModelTier.SMART, 128_000, description = "Reasoning & Mathe"),
+            CloudModel("meta/llama-3.2-90b-vision-instruct", "Llama 3.2 90B Vision", 0.0, 0.0, ModelTier.PRO, 128_000, description = "Bildanalyse / Vision"),
         )
     ),
     CUSTOM(
