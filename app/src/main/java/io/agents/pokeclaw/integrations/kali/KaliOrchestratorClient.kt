@@ -25,11 +25,12 @@ class KaliOrchestratorClient(private val context: Context) {
         val action: String? = null,
         val workflow: String? = null,
         val target: String? = null,
+        val reportId: String? = null,
         val topPorts: Int = 50,
         val url: String? = null,
         val token: String? = null,
     ) {
-        enum class Kind { HELP, STATUS, CONFIG, CLEAR, RUN, WORKFLOW }
+        enum class Kind { HELP, STATUS, CONFIG, CLEAR, RUN, WORKFLOW, REPORTS, REPORT }
     }
 
     companion object {
@@ -81,10 +82,12 @@ class KaliOrchestratorClient(private val context: Context) {
             /kali workflow quick_host 192.168.1.20 50
             /kali workflow web_audit http://192.168.1.20 50
 
+            Reports:
+            /kali reports
+            /kali report REPORT_ID
+
             Aliase:
             dns, web, web_headers, tls, inventory
-
-            Hinweis: Der Kali-Orchestrator prüft Token + allowed_targets und blockt nicht erlaubte Aktionen.
         """.trimIndent()
     }
 
@@ -104,6 +107,8 @@ class KaliOrchestratorClient(private val context: Context) {
 
         if (first == "status") return ParsedCommand(ParsedCommand.Kind.STATUS)
         if (first == "clear" || first == "reset") return ParsedCommand(ParsedCommand.Kind.CLEAR)
+        if (first == "reports" || first == "report-list") return ParsedCommand(ParsedCommand.Kind.REPORTS)
+        if (first == "report") return ParsedCommand(ParsedCommand.Kind.REPORT, reportId = parts.getOrNull(1))
         if (first == "config") {
             val url = parts.getOrNull(1)
             val token = parts.getOrNull(2)
@@ -140,6 +145,8 @@ class KaliOrchestratorClient(private val context: Context) {
             ParsedCommand.Kind.CONFIG -> configure(parsed.url, parsed.token)
             ParsedCommand.Kind.RUN -> runAction(parsed.action, parsed.target, parsed.topPorts)
             ParsedCommand.Kind.WORKFLOW -> runWorkflow(parsed.workflow, parsed.target, parsed.topPorts)
+            ParsedCommand.Kind.REPORTS -> listReports()
+            ParsedCommand.Kind.REPORT -> getReport(parsed.reportId)
         }
     }
 
@@ -170,6 +177,7 @@ class KaliOrchestratorClient(private val context: Context) {
         val health = getJson("/health", includeToken = false)
         val actions = getJson("/actions", includeToken = true)
         val workflows = getJson("/workflows", includeToken = true)
+        val reports = getJson("/reports?limit=5", includeToken = true)
         return buildString {
             appendLine("Kali-Orchestrator Status")
             appendLine("URL: ${baseUrl()}")
@@ -182,6 +190,9 @@ class KaliOrchestratorClient(private val context: Context) {
             appendLine()
             appendLine("Workflows:")
             appendLine(shortJson(workflows))
+            appendLine()
+            appendLine("Recent Reports:")
+            appendLine(formatReportsResponse(reports, maxItems = 5))
         }.trim()
     }
 
@@ -224,6 +235,23 @@ class KaliOrchestratorClient(private val context: Context) {
             .put("args", JSONObject().put("top_ports", topPorts))
         val response = postJson("/workflow", payload)
         return formatWorkflowResponse(response)
+    }
+
+    private fun listReports(): String {
+        if (token().isBlank()) {
+            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
+        }
+        return formatReportsResponse(getJson("/reports?limit=20", includeToken = true), maxItems = 20)
+    }
+
+    private fun getReport(reportId: String?): String {
+        val id = reportId?.trim().orEmpty()
+        if (id.isBlank()) return "Report-ID fehlt. Beispiel: /kali report REPORT_ID"
+        if (token().isBlank()) {
+            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
+        }
+        val data = getJson("/reports/$id.json", includeToken = true)
+        return formatReportDetail(data)
     }
 
     private fun normalizeAction(action: String): String {
@@ -326,6 +354,64 @@ class KaliOrchestratorClient(private val context: Context) {
             }
         }
         return lines.joinToString("\n")
+    }
+
+    private fun formatReportsResponse(data: JSONObject, maxItems: Int): String {
+        if (!data.optBoolean("ok", false)) {
+            return "Reports failed: ${data.optString("error", data.toString()).take(2500)}"
+        }
+        val reports = data.optJSONArray("reports")
+        if (reports == null || reports.length() == 0) return "No reports yet. Run an action or workflow first."
+        val lines = mutableListOf<String>()
+        lines.add("Reports")
+        lines.add("")
+        for (i in 0 until minOf(reports.length(), maxItems)) {
+            val item = reports.optJSONObject(i) ?: continue
+            lines.add("${i + 1}. ${item.optString("created_at")}")
+            lines.add("   ID: ${item.optString("id")}")
+            lines.add("   Action: ${item.optString("action")}")
+            lines.add("   Target: ${item.optString("target")}")
+            lines.add("   Summary: ${item.optString("summary").take(180)}")
+            lines.add("")
+        }
+        lines.add("Open detail: /kali report REPORT_ID")
+        return lines.joinToString("\n").trim()
+    }
+
+    private fun formatReportDetail(data: JSONObject): String {
+        if (data.has("error") && !data.optBoolean("ok", true)) {
+            return "Report failed: ${data.optString("error", data.toString()).take(2500)}"
+        }
+        val id = data.optString("id", "n/a")
+        val action = data.optString("action", "n/a")
+        val target = data.optString("target", "n/a")
+        val created = data.optString("created_at", "n/a")
+        val result = data.optJSONObject("result") ?: JSONObject()
+        return buildString {
+            appendLine("Report Detail")
+            appendLine("ID: $id")
+            appendLine("Created: $created")
+            appendLine("Action: $action")
+            appendLine("Target: $target")
+            appendLine("Return code: ${result.opt("returncode") ?: "n/a"}")
+            appendLine()
+            appendLine("Summary:")
+            appendLine(reportResultSummary(result))
+            appendLine()
+            appendLine("Raw preview:")
+            appendLine(result.toString(2).take(3000))
+        }.trim()
+    }
+
+    private fun reportResultSummary(result: JSONObject): String {
+        return when {
+            result.has("workflow") -> "Workflow ${result.optString("workflow")} completed: ${result.optInt("steps_ok")}/${result.optInt("steps_total")} steps OK."
+            result.has("stdout") -> result.optString("stdout").ifBlank { "No stdout." }.take(1200)
+            result.has("inventory") -> "Inventory completed."
+            result.has("headers") -> "HTTP ${result.optInt("status_code")} server=${result.optString("server")}"
+            result.has("resolved_ips") -> "Resolved: ${result.optJSONArray("resolved_ips")?.join(", ") ?: "n/a"}"
+            else -> result.toString(2).take(1200)
+        }
     }
 
     private fun shortJson(obj: JSONObject): String = obj.toString(2).take(1800)
