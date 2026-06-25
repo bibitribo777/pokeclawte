@@ -1,0 +1,18 @@
+# Index
+
+Start:
+
+```text
+README_MINIMAL.md
+QUICKSTART.md
+```
+
+Details:
+
+```text
+README.md
+README_TELEGRAM.md
+README_TROUBLESHOOTING.md
+KNOWN_LIMITS.md
+TODO_NEXT_APK.md
+```
