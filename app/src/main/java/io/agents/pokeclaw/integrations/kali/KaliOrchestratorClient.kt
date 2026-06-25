@@ -15,8 +15,6 @@ import java.util.Locale
  * Small, safe client for the Kali Security Orchestrator.
  *
  * This is intentionally limited to the orchestrator's policy-checked actions.
- * There is no arbitrary shell, no exploit runner, no credential attack helper,
- * no phishing flow, and no Wi-Fi disruption helper here.
  */
 class KaliOrchestratorClient(private val context: Context) {
 
@@ -25,12 +23,19 @@ class KaliOrchestratorClient(private val context: Context) {
         val action: String? = null,
         val workflow: String? = null,
         val target: String? = null,
+        val targetName: String? = null,
+        val targetType: String? = null,
         val reportId: String? = null,
         val topPorts: Int = 50,
         val url: String? = null,
         val token: String? = null,
     ) {
-        enum class Kind { HELP, STATUS, CONFIG, CLEAR, RUN, WORKFLOW, REPORTS, REPORT }
+        enum class Kind {
+            HELP, STATUS, CONFIG, CLEAR, RUN, WORKFLOW,
+            REPORTS, REPORT,
+            TARGETS, ADD_TARGET,
+            FINDINGS, EVIDENCE, JOBS
+        }
     }
 
     companion object {
@@ -70,6 +75,10 @@ class KaliOrchestratorClient(private val context: Context) {
             Status:
             /kali status
 
+            Targets:
+            /kali targets
+            /kali target add NAME TARGET TYPE
+
             Einzel-Aktionen:
             /kali ping 192.168.1.20
             /kali dns_check scanme.nmap.org
@@ -86,8 +95,10 @@ class KaliOrchestratorClient(private val context: Context) {
             /kali reports
             /kali report REPORT_ID
 
-            Aliase:
-            dns, web, web_headers, tls, inventory
+            Findings / Evidence / Jobs:
+            /kali findings
+            /kali evidence
+            /kali jobs
         """.trimIndent()
     }
 
@@ -107,12 +118,32 @@ class KaliOrchestratorClient(private val context: Context) {
 
         if (first == "status") return ParsedCommand(ParsedCommand.Kind.STATUS)
         if (first == "clear" || first == "reset") return ParsedCommand(ParsedCommand.Kind.CLEAR)
+        if (first == "targets") return ParsedCommand(ParsedCommand.Kind.TARGETS)
+        if (first == "findings") return ParsedCommand(ParsedCommand.Kind.FINDINGS)
+        if (first == "evidence") return ParsedCommand(ParsedCommand.Kind.EVIDENCE)
+        if (first == "jobs" || first == "history") return ParsedCommand(ParsedCommand.Kind.JOBS)
         if (first == "reports" || first == "report-list") return ParsedCommand(ParsedCommand.Kind.REPORTS)
         if (first == "report") return ParsedCommand(ParsedCommand.Kind.REPORT, reportId = parts.getOrNull(1))
         if (first == "config") {
             val url = parts.getOrNull(1)
             val token = parts.getOrNull(2)
             return ParsedCommand(ParsedCommand.Kind.CONFIG, url = url, token = token)
+        }
+        if (first == "target" && parts.getOrNull(1)?.lowercase(Locale.US) == "add") {
+            return ParsedCommand(
+                ParsedCommand.Kind.ADD_TARGET,
+                targetName = parts.getOrNull(2),
+                target = parts.getOrNull(3),
+                targetType = parts.getOrNull(4) ?: "host",
+            )
+        }
+        if (first == "add-target") {
+            return ParsedCommand(
+                ParsedCommand.Kind.ADD_TARGET,
+                targetName = parts.getOrNull(1),
+                target = parts.getOrNull(2),
+                targetType = parts.getOrNull(3) ?: "host",
+            )
         }
         if (first == "workflow" || first == "wf") {
             val workflow = parts.getOrNull(1)
@@ -147,6 +178,11 @@ class KaliOrchestratorClient(private val context: Context) {
             ParsedCommand.Kind.WORKFLOW -> runWorkflow(parsed.workflow, parsed.target, parsed.topPorts)
             ParsedCommand.Kind.REPORTS -> listReports()
             ParsedCommand.Kind.REPORT -> getReport(parsed.reportId)
+            ParsedCommand.Kind.TARGETS -> listTargets()
+            ParsedCommand.Kind.ADD_TARGET -> addTarget(parsed.targetName, parsed.target, parsed.targetType)
+            ParsedCommand.Kind.FINDINGS -> listFindings()
+            ParsedCommand.Kind.EVIDENCE -> listEvidence()
+            ParsedCommand.Kind.JOBS -> listJobs()
         }
     }
 
@@ -178,6 +214,7 @@ class KaliOrchestratorClient(private val context: Context) {
         val actions = getJson("/actions", includeToken = true)
         val workflows = getJson("/workflows", includeToken = true)
         val reports = getJson("/reports?limit=5", includeToken = true)
+        val targets = getJson("/targets", includeToken = true)
         return buildString {
             appendLine("Kali-Orchestrator Status")
             appendLine("URL: ${baseUrl()}")
@@ -190,6 +227,9 @@ class KaliOrchestratorClient(private val context: Context) {
             appendLine()
             appendLine("Workflows:")
             appendLine(shortJson(workflows))
+            appendLine()
+            appendLine("Targets:")
+            appendLine(formatTargetsResponse(targets))
             appendLine()
             appendLine("Recent Reports:")
             appendLine(formatReportsResponse(reports, maxItems = 5))
@@ -204,10 +244,7 @@ class KaliOrchestratorClient(private val context: Context) {
         if (target.isNullOrBlank()) {
             return "Target fehlt. Beispiel: /kali $a 192.168.1.20"
         }
-        val token = token()
-        if (token.isBlank()) {
-            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
-        }
+        requireConfigured()?.let { return it }
 
         val payload = JSONObject()
             .put("action", a)
@@ -225,10 +262,7 @@ class KaliOrchestratorClient(private val context: Context) {
         if (target.isNullOrBlank()) {
             return "Target fehlt. Beispiel: /kali workflow $workflow 192.168.1.20 50"
         }
-        val token = token()
-        if (token.isBlank()) {
-            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
-        }
+        requireConfigured()?.let { return it }
         val payload = JSONObject()
             .put("workflow", workflow)
             .put("target", target)
@@ -237,21 +271,61 @@ class KaliOrchestratorClient(private val context: Context) {
         return formatWorkflowResponse(response)
     }
 
-    private fun listReports(): String {
-        if (token().isBlank()) {
-            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
+    private fun listTargets(): String {
+        requireConfigured()?.let { return it }
+        return formatTargetsResponse(getJson("/targets", includeToken = true))
+    }
+
+    private fun addTarget(name: String?, target: String?, type: String?): String {
+        if (name.isNullOrBlank() || target.isNullOrBlank()) {
+            return "Usage: /kali target add NAME TARGET TYPE"
         }
+        requireConfigured()?.let { return it }
+        val payload = JSONObject()
+            .put("name", name)
+            .put("value", target)
+            .put("type", type ?: "host")
+        val response = postJson("/targets", payload)
+        return if (response.optBoolean("ok", false)) {
+            val item = response.optJSONObject("target") ?: JSONObject()
+            "Target saved\nName: ${item.optString("name")}\nValue: ${item.optString("value")}\nAllowed: ${item.optBoolean("allowed")}\nReason: ${item.optString("allow_reason")}"
+        } else {
+            "Target save failed: ${response.optString("error", response.toString()).take(2000)}"
+        }
+    }
+
+    private fun listReports(): String {
+        requireConfigured()?.let { return it }
         return formatReportsResponse(getJson("/reports?limit=20", includeToken = true), maxItems = 20)
     }
 
     private fun getReport(reportId: String?): String {
         val id = reportId?.trim().orEmpty()
         if (id.isBlank()) return "Report-ID fehlt. Beispiel: /kali report REPORT_ID"
-        if (token().isBlank()) {
-            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
-        }
+        requireConfigured()?.let { return it }
         val data = getJson("/reports/$id.json", includeToken = true)
         return formatReportDetail(data)
+    }
+
+    private fun listFindings(): String {
+        requireConfigured()?.let { return it }
+        return formatFindingsResponse(getJson("/findings?limit=50", includeToken = true))
+    }
+
+    private fun listEvidence(): String {
+        requireConfigured()?.let { return it }
+        return formatEvidenceResponse(getJson("/evidence?limit=50", includeToken = true))
+    }
+
+    private fun listJobs(): String {
+        requireConfigured()?.let { return it }
+        return formatJobsResponse(getJson("/jobs?limit=50", includeToken = true))
+    }
+
+    private fun requireConfigured(): String? {
+        return if (token().isBlank()) {
+            "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
+        } else null
     }
 
     private fun normalizeAction(action: String): String {
@@ -308,7 +382,6 @@ class KaliOrchestratorClient(private val context: Context) {
         val report = data.optJSONObject("report")
         val result = data.optJSONObject("result") ?: JSONObject()
         val reportId = report?.optString("report_id", "n/a") ?: "n/a"
-
         val summary = when {
             result.has("inventory") -> "Inventory completed. Report: $reportId"
             result.has("stdout") -> result.optString("stdout").ifBlank { "No output." }.take(2600)
@@ -317,7 +390,6 @@ class KaliOrchestratorClient(private val context: Context) {
             result.has("not_after") -> "TLS valid until ${result.optString("not_after")} cipher=${result.optString("cipher")}"
             else -> result.toString(2).take(2600)
         }
-
         return buildString {
             appendLine("Kali result")
             appendLine("Action: $action")
@@ -352,6 +424,20 @@ class KaliOrchestratorClient(private val context: Context) {
                 val step = steps.optJSONObject(i) ?: continue
                 lines.add("- ${step.optString("id")}: ${step.optString("action")} ok=${step.optBoolean("ok")}")
             }
+        }
+        return lines.joinToString("\n")
+    }
+
+    private fun formatTargetsResponse(data: JSONObject): String {
+        if (!data.optBoolean("ok", false)) return "Targets failed: ${data.optString("error", data.toString()).take(2000)}"
+        val targets = data.optJSONArray("targets") ?: return "No targets saved yet."
+        if (targets.length() == 0) return "No targets saved yet."
+        val lines = mutableListOf("Targets", "")
+        for (i in 0 until minOf(targets.length(), 30)) {
+            val item = targets.optJSONObject(i) ?: continue
+            lines.add("${i + 1}. ${item.optString("name")} [${item.optString("type")}]")
+            lines.add("   ${item.optString("value")}")
+            lines.add("   allowed=${item.optBoolean("allowed")} ${item.optString("allow_reason")}")
         }
         return lines.joinToString("\n")
     }
@@ -401,6 +487,47 @@ class KaliOrchestratorClient(private val context: Context) {
             appendLine("Raw preview:")
             appendLine(result.toString(2).take(3000))
         }.trim()
+    }
+
+    private fun formatFindingsResponse(data: JSONObject): String {
+        if (!data.optBoolean("ok", false)) return "Findings failed: ${data.optString("error", data.toString()).take(2000)}"
+        val arr = data.optJSONArray("findings") ?: return "No findings yet."
+        if (arr.length() == 0) return "No findings yet."
+        val lines = mutableListOf("Findings", "")
+        for (i in 0 until minOf(arr.length(), 30)) {
+            val item = arr.optJSONObject(i) ?: continue
+            lines.add("${i + 1}. [${item.optString("severity")}] ${item.optString("title")}")
+            lines.add("   Target: ${item.optString("target")}")
+            lines.add("   Report: ${item.optString("report_id")}")
+        }
+        return lines.joinToString("\n")
+    }
+
+    private fun formatEvidenceResponse(data: JSONObject): String {
+        if (!data.optBoolean("ok", false)) return "Evidence failed: ${data.optString("error", data.toString()).take(2000)}"
+        val arr = data.optJSONArray("evidence") ?: return "No evidence yet."
+        if (arr.length() == 0) return "No evidence yet."
+        val lines = mutableListOf("Evidence", "")
+        for (i in 0 until minOf(arr.length(), 30)) {
+            val item = arr.optJSONObject(i) ?: continue
+            lines.add("${i + 1}. ${item.optString("name")} (${item.optString("type")}, ${item.optInt("size_bytes")} bytes)")
+            lines.add("   ID: ${item.optString("id")}")
+        }
+        return lines.joinToString("\n")
+    }
+
+    private fun formatJobsResponse(data: JSONObject): String {
+        if (!data.optBoolean("ok", false)) return "Jobs failed: ${data.optString("error", data.toString()).take(2000)}"
+        val arr = data.optJSONArray("jobs") ?: return "No jobs yet."
+        if (arr.length() == 0) return "No jobs yet."
+        val lines = mutableListOf("Job History", "")
+        for (i in 0 until minOf(arr.length(), 30)) {
+            val item = arr.optJSONObject(i) ?: continue
+            lines.add("${i + 1}. ${item.optString("created_at")} ${item.optString("kind")} ${item.optString("status")}")
+            lines.add("   Target: ${item.optString("target")}")
+            lines.add("   Report: ${item.optString("report_id")}")
+        }
+        return lines.joinToString("\n")
     }
 
     private fun reportResultSummary(result: JSONObject): String {
