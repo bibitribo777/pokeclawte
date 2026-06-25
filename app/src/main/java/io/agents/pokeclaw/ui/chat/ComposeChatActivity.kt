@@ -25,6 +25,7 @@ import io.agents.pokeclaw.automation.ExternalAutomationContract
 import io.agents.pokeclaw.automation.ExternalAutomationEntrypoint
 import io.agents.pokeclaw.appViewModel
 import io.agents.pokeclaw.floating.FloatingCircleManager
+import io.agents.pokeclaw.integrations.kali.KaliOrchestratorClient
 import io.agents.pokeclaw.ui.settings.LlmConfigActivity
 import io.agents.pokeclaw.ui.settings.SettingsActivity
 import io.agents.pokeclaw.utils.KVUtils
@@ -109,6 +110,10 @@ class ComposeChatActivity : ComponentActivity() {
 
     private val activeTaskShellController by lazy {
         ActiveTaskShellController(appViewModel = appViewModel)
+    }
+
+    private val kaliOrchestratorClient by lazy {
+        KaliOrchestratorClient(this)
     }
 
     // Permission polling
@@ -297,7 +302,34 @@ class ComposeChatActivity : ComponentActivity() {
     // ==================== CHAT ====================
 
     private fun sendChat(text: String) {
+        if (KaliOrchestratorClient.looksLikeCommand(text)) {
+            sendKaliChat(text)
+            return
+        }
         chatSessionController.sendChat(text)
+    }
+
+    private fun sendKaliChat(text: String) {
+        _messages.add(ChatMessage(ChatMessage.Role.USER, text))
+        _messages.add(ChatMessage(ChatMessage.Role.SYSTEM, "Kali-Orchestrator läuft…"))
+        _isAwaitingReply.value = true
+        saveChat()
+
+        executor.execute {
+            val response = try {
+                val parsed = kaliOrchestratorClient.parse(text)
+                kaliOrchestratorClient.run(parsed)
+            } catch (e: Exception) {
+                "Kali-Orchestrator Fehler: ${e.message ?: e.javaClass.simpleName}"
+            }
+
+            runOnUiThread {
+                _messages.removeLastKaliPendingMarker()
+                _messages.add(ChatMessage(ChatMessage.Role.ASSISTANT, response))
+                _isAwaitingReply.value = false
+                saveChat()
+            }
+        }
     }
 
     private fun handleIntentAutomation(intent: Intent?, initialDelayMs: Long) {
@@ -317,6 +349,10 @@ class ComposeChatActivity : ComponentActivity() {
             override fun run() {
                 if (isTask) {
                     taskFlowController.sendTask(automationText)
+                    return
+                }
+                if (KaliOrchestratorClient.looksLikeCommand(automationText)) {
+                    sendKaliChat(automationText)
                     return
                 }
                 if (!KVUtils.hasLlmConfig()) {
@@ -449,4 +485,11 @@ class ComposeChatActivity : ComponentActivity() {
             config.activeCloud.modelName
         }
     }
+}
+
+private fun MutableList<ChatMessage>.removeLastKaliPendingMarker() {
+    val index = indexOfLast {
+        it.role == ChatMessage.Role.SYSTEM && it.content == "Kali-Orchestrator läuft…"
+    }
+    if (index >= 0) removeAt(index)
 }
