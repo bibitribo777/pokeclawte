@@ -173,10 +173,10 @@ class ComposeChatActivity : ComponentActivity() {
                         taskFlowController.sendTask("send \"$message\" to $contact on $app")
                     },
                     onNewChat = { newChat() },
-                    onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
-                    onOpenModels = { startActivity(Intent(this, LlmConfigActivity::class.java)) },
-                    onFixPermissions = { startActivity(Intent(this, SettingsActivity::class.java)) },
-                    onAttach = { Toast.makeText(this, "Image upload coming soon", Toast.LENGTH_SHORT).show() },
+                    onOpenSettings = { startActivity(Intent(this@ComposeChatActivity, SettingsActivity::class.java)) },
+                    onOpenModels = { startActivity(Intent(this@ComposeChatActivity, LlmConfigActivity::class.java)) },
+                    onFixPermissions = { startActivity(Intent(this@ComposeChatActivity, SettingsActivity::class.java)) },
+                    onAttach = { Toast.makeText(this@ComposeChatActivity, "Image upload coming soon", Toast.LENGTH_SHORT).show() },
                     conversations = _conversations.toList(),
                     onSelectConversation = { loadConversation(it) },
                     onDeleteConversation = { conv ->
@@ -193,7 +193,7 @@ class ComposeChatActivity : ComponentActivity() {
                     onStopTask = { contact ->
                         _isTaskRunning.value = appViewModel.isTaskRunning()
                         Toast.makeText(
-                            this,
+                            this@ComposeChatActivity,
                             activeTaskShellController.stopTask(contact),
                             Toast.LENGTH_SHORT
                         ).show()
@@ -202,7 +202,7 @@ class ComposeChatActivity : ComponentActivity() {
                         _isAwaitingReply.value = false
                         _isTaskRunning.value = false
                         Toast.makeText(
-                            this,
+                            this@ComposeChatActivity,
                             activeTaskShellController.stopAllTasks(),
                             Toast.LENGTH_SHORT
                         ).show()

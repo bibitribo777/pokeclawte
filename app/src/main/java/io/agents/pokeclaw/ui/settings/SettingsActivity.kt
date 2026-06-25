@@ -471,7 +471,7 @@ class SettingsActivity : BaseActivity() {
     private fun shareDebugReport() {
         lifecycleScope.launch {
             try {
-                val report = withContext(Dispatchers.IO) { DebugReportManager.createReport(this@SettingsActivity) }
+                val report = withContext(Dispatchers.IO) { DebugReportManager.buildReport(this@SettingsActivity) }
                 val uri = FileProvider.getUriForFile(
                     this@SettingsActivity,
                     "${packageName}.fileprovider",
