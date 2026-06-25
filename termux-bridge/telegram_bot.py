@@ -28,6 +28,8 @@ POLL_TIMEOUT = int(os.getenv("TELEGRAM_POLL_TIMEOUT", "30"))
 
 if not TOKEN:
     raise SystemExit("Missing TELEGRAM_BOT_TOKEN environment variable")
+if not ALLOWED_CHAT_ID:
+    raise SystemExit("Missing TELEGRAM_ALLOWED_CHAT_ID — required to prevent unauthorized access")
 
 API = f"https://api.telegram.org/bot{TOKEN}"
 

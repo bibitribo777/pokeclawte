@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        Lab integration note:
-        PokeClaw's Kali Orchestrator MVP commonly runs as a local/LAN HTTP API
-        such as http://127.0.0.1:8899 or http://192.168.1.x:8899.
-        The orchestrator still requires its own token and target allowlist.
+        Cleartext (HTTP) only for local Kali Orchestrator on localhost/LAN.
+        All other traffic (Cloud LLM APIs etc.) must use HTTPS.
     -->
-    <base-config cleartextTrafficPermitted="true">
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">192.168.0.0</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -300,7 +301,7 @@ private fun ReportsTab(running: Boolean, output: String, onRun: (String) -> Unit
 
 @Composable
 private fun SettingsTab(running: Boolean, onRun: (String) -> Unit) {
-    var url by remember { mutableStateOf("http://192.168.1.50:8899") }
+    var url by remember { mutableStateOf(io.agents.pokeclaw.integrations.kali.KaliOrchestratorClient.DEFAULT_URL) }
     var token by remember { mutableStateOf("") }
 
     SectionCard(title = "Connection") {
@@ -318,6 +319,7 @@ private fun SettingsTab(running: Boolean, onRun: (String) -> Unit) {
             label = { Text("API Token") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
         )
         Spacer(modifier = Modifier.height(12.dp))
         Button(

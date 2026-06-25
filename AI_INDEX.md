@@ -12,7 +12,8 @@ This is the repo map for coding agents. Keep canonical information in existing f
 | `RELEASING.md` | Release signing, tag workflow, stable APK publishing |
 | `BACKLOG.md` | Prioritized bugs, features, QA gaps, ideas |
 | `ARCHITECTURE_RECONSTRUCTION.md` | Historical architecture reconstruction plan and refactor guardrails |
-| `CLA.md` | Contributor license agreement |
+| `UPSTREAM_CLA.md` | Original upstream CLA (reference only) |
+| `FORK_NOTES.md` | Fork status, trademark, distribution checklist |
 | `AI_INDEX.md` | This repo map |
 
 ## Directory Map
@@ -26,6 +27,10 @@ This is the repo map for coding agents. Keep canonical information in existing f
 | `.github/workflows/` | CI, CLA check, signed release workflow |
 | `docs/` | GitHub Pages site and public site assets |
 | `docs/screenshots/` | Screenshot assets used by the landing page |
+| `kali-orchestrator/` | Python Flask API — Kali security orchestrator (3-gate safety model) |
+| `termux-bridge/` | Termux → PokeClaw bridge (HTTP API + Telegram bot) |
+| `app/.../integrations/kali/` | Android Kali client (KaliOrchestratorClient.kt) |
+| `app/.../ui/kali/` | Kali Lab Activity (Compose UI) |
 | `demo/` | Legacy demo GIF assets |
 | `Screenshots/` | Legacy screenshot assets |
 | `prototype/` | Historical UI prototypes |

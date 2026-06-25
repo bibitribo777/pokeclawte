@@ -4,6 +4,7 @@
 package io.agents.pokeclaw.integrations.kali
 
 import android.content.Context
+import io.agents.pokeclaw.utils.XLog
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.OutputStreamWriter
@@ -39,10 +40,11 @@ class KaliOrchestratorClient(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "KaliOrch"
         private const val PREFS = "kali_orchestrator"
         private const val KEY_URL = "url"
         private const val KEY_TOKEN = "token"
-        private const val DEFAULT_URL = "http://127.0.0.1:8899"
+        const val DEFAULT_URL = "http://127.0.0.1:8899"
 
         private val ALIASES = mapOf(
             "dns" to "dns_check",
@@ -169,6 +171,7 @@ class KaliOrchestratorClient(private val context: Context) {
     }
 
     fun run(parsed: ParsedCommand): String {
+        XLog.d(TAG, "run: kind=${parsed.kind} action=${parsed.action} target=${parsed.target}")
         return when (parsed.kind) {
             ParsedCommand.Kind.HELP -> helpText()
             ParsedCommand.Kind.STATUS -> status()
@@ -197,6 +200,7 @@ class KaliOrchestratorClient(private val context: Context) {
             .putString(KEY_URL, url.trimEnd('/'))
             .putString(KEY_TOKEN, token)
             .apply()
+        XLog.i(TAG, "configure: url=${url.trimEnd('/')} tokenLen=${token.length}")
         return "Kali-Orchestrator config gespeichert. Teste jetzt: /kali status"
     }
 
@@ -239,6 +243,7 @@ class KaliOrchestratorClient(private val context: Context) {
     private fun runAction(action: String?, target: String?, topPorts: Int): String {
         val a = action?.lowercase(Locale.US)?.trim().orEmpty()
         if (a !in SAFE_ACTIONS) {
+            XLog.w(TAG, "runAction: rejected unknown action=$action")
             return "Action nicht erlaubt oder unbekannt: $action\n\n${helpText()}"
         }
         if (target.isNullOrBlank()) {
@@ -337,6 +342,7 @@ class KaliOrchestratorClient(private val context: Context) {
     private fun token(): String = prefs.getString(KEY_TOKEN, "") ?: ""
 
     private fun getJson(path: String, includeToken: Boolean): JSONObject {
+        XLog.d(TAG, "GET ${baseUrl()}$path auth=$includeToken")
         val url = URL(baseUrl() + path)
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -348,6 +354,7 @@ class KaliOrchestratorClient(private val context: Context) {
     }
 
     private fun postJson(path: String, payload: JSONObject): JSONObject {
+        XLog.d(TAG, "POST ${baseUrl()}$path")
         val url = URL(baseUrl() + path)
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -366,7 +373,8 @@ class KaliOrchestratorClient(private val context: Context) {
         val body = stream?.bufferedReader(Charsets.UTF_8)?.use(BufferedReader::readText).orEmpty()
         return try {
             JSONObject(body).put("http_status", conn.responseCode)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            XLog.e(TAG, "readJson: parse failed status=${conn.responseCode} bodyLen=${body.length}", e)
             JSONObject().put("ok", false).put("http_status", conn.responseCode).put("raw", body.take(2000))
         } finally {
             conn.disconnect()

@@ -148,7 +148,7 @@ Create a bot with BotFather and export the token:
 export TELEGRAM_BOT_TOKEN="123456:ABC..."
 ```
 
-Optional: lock to your own chat id:
+Required: lock to your own chat id (security gate — bot refuses to start without this):
 
 ```bash
 export TELEGRAM_ALLOWED_CHAT_ID="123456789"
@@ -205,3 +205,25 @@ Termux triggers.
 PokeClaw executes visibly.
 User checks result in PokeClaw.
 ```
+
+## Troubleshooting
+
+### PokeClaw does not open
+
+Check: PokeClaw APK installed, package is `io.agents.pokeclaw`, External Automation enabled, Termux has `am` available. Try direct: `./direct-am-test.sh "how much battery left"`
+
+### Bridge does not answer
+
+```bash
+./status.sh
+cat bridge.log
+curl http://127.0.0.1:8787/health
+```
+
+### Telegram says launched but nothing happens
+
+Test without Telegram first: `./test.sh`, then `./direct-am-test.sh "how much battery left"`
+
+### Android kills Termux
+
+Run `termux-wake-lock`, then set Termux and PokeClaw battery mode to unrestricted.

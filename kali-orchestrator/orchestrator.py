@@ -746,8 +746,9 @@ def run_action():
         return jsonify({"ok": False, "error": str(exc), "policy": POLICY}), 403
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "action timeout"}), 504
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+    except Exception:
+        APP.logger.error("run action failed: %s %s", action, target, exc_info=True)
+        return jsonify({"ok": False, "error": "action failed"}), 500
 
 
 @APP.post("/workflow")
@@ -777,8 +778,9 @@ def run_workflow_endpoint():
         return jsonify({"ok": False, "error": str(exc), "workflows": list_workflows()}), 404
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "workflow timeout"}), 504
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+    except Exception:
+        APP.logger.error("run workflow failed: %s %s", name, target, exc_info=True)
+        return jsonify({"ok": False, "error": "workflow failed"}), 500
 
 
 @APP.get("/reports/<report_id>.json")

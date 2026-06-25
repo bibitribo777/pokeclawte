@@ -1,3 +1,0 @@
-# Last
-
-Termux bridge prepared.
