@@ -1,0 +1,21 @@
+{
+  "name": "web_audit",
+  "description": "Safe first-pass web audit workflow for one authorized URL or host.",
+  "default_args": {
+    "top_ports": 50
+  },
+  "steps": [
+    {
+      "id": "web",
+      "action": "web_check"
+    },
+    {
+      "id": "tls",
+      "action": "tls_check"
+    },
+    {
+      "id": "scan",
+      "action": "scan_host"
+    }
+  ]
+}
