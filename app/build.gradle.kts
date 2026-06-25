@@ -1,5 +1,3 @@
-import jdk.internal.net.http.common.Log.channel
-import org.jetbrains.kotlin.konan.properties.hasProperty
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -221,24 +219,10 @@ fun getBuildFingerprint(): String {
         val r = BufferedReader(InputStreamReader(p.inputStream))
         r.readLine()?.trim() ?: "unknown"
     } catch (_: Exception) { "unknown" }
-    val ts = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
     val builder = System.getenv("BUILDER_ID") ?: System.getProperty("user.name") ?: "local"
-    return "$gitHash|$ts|$builder"
+    return "$gitHash-$builder-${System.currentTimeMillis()}"
 }
 
 fun getDateTime(): String {
-    val df = SimpleDateFormat("yyyyMMdd_HHmmss");
-    return df.format(Date());
-}
-
-fun getParameter(key: String, defaultValue: String): String {
-    var value = defaultValue
-    val hasProperty = project.hasProperty(key)
-    if (hasProperty) {
-        val property = project.properties[key] as String?
-        if (!property.isNullOrEmpty()) {
-            value = property
-        }
-    }
-    return value
+    return SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
 }
