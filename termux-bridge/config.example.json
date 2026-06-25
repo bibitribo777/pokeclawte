@@ -1,0 +1,11 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "bridge_token": "",
+  "pokeclaw_package": "io.agents.pokeclaw",
+  "pokeclaw_external_activity": "io.agents.pokeclaw/.automation.ExternalAutomationActivity",
+  "run_task_action": "io.agents.pokeclaw.RUN_TASK",
+  "run_chat_action": "io.agents.pokeclaw.RUN_CHAT",
+  "bring_to_front": true,
+  "default_mode": "task"
+}
