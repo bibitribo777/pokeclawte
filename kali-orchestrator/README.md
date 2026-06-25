@@ -1,13 +1,13 @@
 # Kali Security Orchestrator
 
-A safe, policy-based orchestrator for authorized security labs and your own systems.
+A policy-based orchestrator for authorized security labs and your own systems.
 
 ```text
 Termux / Telegram / PokeClaw
         ↓
 Kali Orchestrator API
         ↓
-Allowed security actions only
+Allowed security inventory actions only
         ↓
 JSON + Markdown report
 ```
@@ -18,10 +18,11 @@ Allowed actions:
 
 ```text
 ping
-DNS resolve
-HTTP header check
-limited service inventory with nmap
-combined inventory report
+DNS resolve: dns_check / dns
+HTTP check: web_check / web / web_headers
+TLS certificate check: tls_check / tls
+limited service inventory: scan_host
+combined inventory report: service_inventory / inventory
 ```
 
 API endpoints:
@@ -36,15 +37,15 @@ GET  /reports/<id>.md
 
 ## What it intentionally does not do
 
-This first version does not run exploit chains, password brute-force, phishing, deauth/Wi-Fi disruption, malware, payload generation, or arbitrary shell commands.
+This version does not run exploit chains, password attacks, phishing, Wi-Fi disruption, malware, payload generation, stealth, or arbitrary shell commands.
 
-Those actions are blocked in policy by default. Build lab-only workflows later with explicit allowlist, proof-of-ownership, confirmation, and logging.
+The design is intentionally boring: action allowlist, target allowlist, reports, and no free shell endpoint.
 
 ## Install on Kali
 
 ```bash
 cd kali-orchestrator
-chmod +x install.sh
+chmod +x *.sh *.py
 ./install.sh
 ```
 
@@ -64,6 +65,7 @@ Add only your own lab/authorized ranges:
 
 ```json
 "allowed_targets": [
+  "127.0.0.1/32",
   "192.168.1.0/24",
   "10.0.0.0/24",
   "scanme.nmap.org"
@@ -80,7 +82,7 @@ Add only your own lab/authorized ranges:
 
 ```bash
 export KALI_ORCH_TOKEN="YOUR_LONG_RANDOM_TOKEN"
-./test.sh 127.0.0.1 inventory
+./test.sh 127.0.0.1 service_inventory
 ```
 
 Example direct API call:
@@ -117,6 +119,21 @@ Every run writes:
 ```text
 reports/<id>.json
 reports/<id>.md
+```
+
+## Termux / Telegram integration
+
+Termux has `kali_client.py`, and the Telegram bot supports `/kali` commands.
+
+Examples:
+
+```text
+/kali ping 192.168.1.20
+/kali dns_check scanme.nmap.org
+/kali web_check http://192.168.1.20
+/kali tls_check example.com
+/kali scan_host 192.168.1.20 50
+/kali service_inventory 192.168.1.20 50
 ```
 
 ## First build goal
