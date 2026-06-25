@@ -1,0 +1,20 @@
+### health
+GET http://127.0.0.1:8787/health
+
+### task
+POST http://127.0.0.1:8787/task
+Content-Type: application/json
+
+{"task":"how much battery left"}
+
+### chat
+POST http://127.0.0.1:8787/chat
+Content-Type: application/json
+
+{"chat":"what can you do?"}
+
+### run
+POST http://127.0.0.1:8787/run
+Content-Type: application/json
+
+{"mode":"task","text":"summarize my notifications"}
