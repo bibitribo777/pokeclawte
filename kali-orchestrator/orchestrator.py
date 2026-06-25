@@ -31,7 +31,9 @@ from flask import Flask, jsonify, request, send_file
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("KALI_ORCH_CONFIG", ROOT / "config.json"))
 REPORT_DIR = ROOT / "reports"
+WORKFLOW_DIR = ROOT / "workflows"
 REPORT_DIR.mkdir(exist_ok=True)
+WORKFLOW_DIR.mkdir(exist_ok=True)
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "host": "127.0.0.1",
@@ -327,6 +329,78 @@ ACTIONS = {
 }
 
 
+def list_workflows() -> Dict[str, Any]:
+    items: Dict[str, Any] = {}
+    for path in sorted(WORKFLOW_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            items[path.stem] = {
+                "name": data.get("name", path.stem),
+                "description": data.get("description", ""),
+                "steps": [step.get("action") for step in data.get("steps", [])],
+            }
+        except Exception as exc:
+            items[path.stem] = {"error": str(exc)}
+    return items
+
+
+def load_workflow(name: str) -> Dict[str, Any]:
+    safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "", name or "")
+    if not safe_name:
+        raise ValueError("invalid workflow name")
+    path = WORKFLOW_DIR / f"{safe_name}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"workflow not found: {safe_name}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_workflow(name: str, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    workflow = load_workflow(name)
+    target = safe_target_string(target)
+    base_args = dict(workflow.get("default_args") or {})
+    base_args.update(args or {})
+    steps_out: List[Dict[str, Any]] = []
+    start = time.time()
+
+    for step in workflow.get("steps", []):
+        step_id = str(step.get("id") or step.get("action") or "step")
+        action = str(step.get("action") or "").strip().lower()
+        step_target = str(step.get("target") or target)
+        step_args = dict(base_args)
+        step_args.update(step.get("args") or {})
+        required = bool(step.get("required", False))
+
+        if action not in ACTIONS:
+            item = {"id": step_id, "action": action, "ok": False, "error": "unknown action"}
+            steps_out.append(item)
+            if required:
+                break
+            continue
+
+        try:
+            result = ACTIONS[action](step_target, step_args)
+            ok = result.get("returncode", 0) == 0
+            steps_out.append({"id": step_id, "action": action, "target": step_target, "ok": ok, "result": result})
+            if required and not ok:
+                break
+        except Exception as exc:
+            steps_out.append({"id": step_id, "action": action, "target": step_target, "ok": False, "error": str(exc)})
+            if required:
+                break
+
+    ok_count = sum(1 for item in steps_out if item.get("ok"))
+    return {
+        "returncode": 0 if ok_count > 0 else 1,
+        "workflow": workflow.get("name", name),
+        "description": workflow.get("description", ""),
+        "target": target,
+        "steps_total": len(steps_out),
+        "steps_ok": ok_count,
+        "duration_seconds": round(time.time() - start, 3),
+        "steps": steps_out,
+    }
+
+
 def make_report(action: str, target: str, args: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, str]:
     report_id = str(uuid.uuid4())
     json_path = REPORT_DIR / f"{report_id}.json"
@@ -364,6 +438,8 @@ def make_report(action: str, target: str, args: Dict[str, Any], result: Dict[str
 
 
 def summarize_result(result: Dict[str, Any]) -> str:
+    if "workflow" in result:
+        return f"Workflow {result.get('workflow')} completed: {result.get('steps_ok')}/{result.get('steps_total')} steps OK."
     if "stdout" in result:
         text = str(result.get("stdout") or "").strip()
         return text[:1500] if text else "No stdout."
@@ -380,7 +456,7 @@ def summarize_result(result: Dict[str, Any]) -> str:
 
 @APP.get("/health")
 def health():
-    return jsonify({"ok": True, "service": "kali-security-orchestrator", "actions": sorted(ACTIONS.keys()), "time": now_iso()})
+    return jsonify({"ok": True, "service": "kali-security-orchestrator", "actions": sorted(ACTIONS.keys()), "workflows": sorted(list_workflows().keys()), "time": now_iso()})
 
 
 @APP.get("/actions")
@@ -389,6 +465,14 @@ def actions():
     if deny:
         return deny
     return jsonify({"ok": True, "actions": sorted(ACTIONS.keys()), "blocked_actions": POLICY.get("blocked_actions", [])})
+
+
+@APP.get("/workflows")
+def workflows():
+    deny = require_auth()
+    if deny:
+        return deny
+    return jsonify({"ok": True, "workflows": list_workflows()})
 
 
 @APP.post("/run")
@@ -414,6 +498,35 @@ def run_action():
         return jsonify({"ok": False, "error": str(exc), "policy": POLICY}), 403
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "action timeout"}), 504
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@APP.post("/workflow")
+def run_workflow_endpoint():
+    deny = require_auth()
+    if deny:
+        return deny
+    data = request.get_json(force=True, silent=False) or {}
+    name = str(data.get("workflow") or data.get("name") or "").strip()
+    target = str(data.get("target") or "").strip()
+    args = data.get("args") or {}
+
+    if not name:
+        return jsonify({"ok": False, "error": "missing workflow"}), 400
+    if not target:
+        return jsonify({"ok": False, "error": "missing target"}), 400
+
+    try:
+        result = run_workflow(name, target, args)
+        report = make_report(f"workflow:{name}", target, args, result)
+        return jsonify({"ok": result.get("returncode", 0) == 0, "workflow": name, "target": target, "result": result, "report": report})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc), "policy": POLICY}), 403
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc), "workflows": list_workflows()}), 404
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "workflow timeout"}), 504
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
